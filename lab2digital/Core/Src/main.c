@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+DAC_HandleTypeDef hdac1;
+
 UART_HandleTypeDef hlpuart1;
 
 /* USER CODE BEGIN PV */
@@ -71,6 +73,14 @@ struct _ADC_tag ADC1_Channel[2] =
 .data = 0
 }
 };
+float output_mvADC ;
+uint16_t DAC_Output=0;
+float outDAC_mvraw=0;
+uint16_t DAC_Pre_Input;
+uint16_t DAC_Input;
+float Input_Voltage ;
+float Pre_Voltage ;
+float DAC_Voltage_Output;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,8 +88,16 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
 void ADC_Read_blocking();
+void ans_raw ();
+
+void DAC_Update();
+
+
+void Press_the_button();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -117,22 +135,32 @@ int main(void)
   MX_GPIO_Init();
   MX_LPUART1_UART_Init();
   MX_ADC1_Init();
+  MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+
+  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2048);
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 	  ADC_Read_blocking();
+	  ans_raw();
+	  DAC_Update();
+	  Press_the_button();
+	  }
 	  }
 
+
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
@@ -203,7 +231,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.Resolution = ADC_RESOLUTION_10B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.GainCompensation = 0;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
@@ -245,6 +273,53 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_HighFrequency = DAC_HIGH_FREQUENCY_INTERFACE_MODE_AUTOMATIC;
+  sConfig.DAC_DMADoubleDataMode = DISABLE;
+  sConfig.DAC_SignedFormat = DISABLE;
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger2 = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_EXTERNAL;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
 
 }
 
@@ -315,11 +390,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -327,10 +402,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -351,6 +422,70 @@ ADC1_Channel[i].data = HAL_ADC_GetValue(&hadc1);
 HAL_ADC_Stop(&hadc1);
 }
 }
+void ans_raw(){
+	output_mvADC = ADC1_Channel[0].data*(3300.0 / 1023.0);
+}
+void DAC_Update()
+{
+static uint32_t timeStamp =0;
+if(HAL_GetTick()>timeStamp)
+{
+timeStamp = HAL_GetTick()+750;
+if (DAC_Input != DAC_Pre_Input)
+    {
+        DAC_Output = DAC_Input;
+        DAC_Voltage_Output = 3300*DAC_Output/4096;
+    }
+    else if (Input_Voltage != Pre_Voltage)
+    {
+        DAC_Output = 4096*Input_Voltage/3300;
+        DAC_Voltage_Output = 3300*DAC_Output/4096;
+    }
+HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, DAC_Output);
+Pre_Voltage = Input_Voltage;
+DAC_Pre_Input = DAC_Input;
+HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, DAC_Output);
+}
+}
+//void mvchange(){
+//	DAC_Output = (inmv_to_raw  * 4095.0) / 3300.0;
+//
+//}
+//void rawchange(){
+//	outDAC_mvraw = (inraw_to_mv*4095.0)/3300.0 ;
+
+//}
+void Press_the_button(){
+	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 1) {
+		DAC_Output = (output_mvADC*4095.0) /3300. ;
+
+	    }
+//	}
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+//{
+//if(GPIO_Pin == GPIO_PIN_13)
+//{
+//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+//DAC_Output = (output_mvADC*4095.0) /3300. ;
+//}
+}
+//	ตรวจสอบสถานะของปุ่ม B1
+//	GPIO_PinState B1 = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+//	if (B1 == GPIO_PIN_SET)
+//	{
+//		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, B1);
+//
+//	ADC_Read_blocking(); // อ่านค่า
+//	ans_raw(); // คำนวณค่า
+//
+//	DAC_Output = ADC1_Channel[0].data >> 2; // นำค่าที่ได้จา�? ADC ไปใส่ใน DAC
+//	 // �?ปลงค่า DAC_Output เป็น�?บบ analog
+//	digital_change();
+//	analog_change();
+//	}else{
+//		 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+//	}
+
 /* USER CODE END 4 */
 
 /**

@@ -1,0 +1,11 @@
+../Core/Src/main.c:112:5:main	8	static
+../Core/Src/main.c:169:6:SystemClock_Config	88	static
+../Core/Src/main.c:216:13:MX_ADC1_Init	56	static
+../Core/Src/main.c:284:13:MX_DAC1_Init	56	static
+../Core/Src/main.c:331:13:MX_LPUART1_UART_Init	8	static
+../Core/Src/main.c:378:13:MX_GPIO_Init	48	static
+../Core/Src/main.c:411:6:ADC_Read_blocking	16	static
+../Core/Src/main.c:425:6:ans_raw	8	static
+../Core/Src/main.c:428:6:DAC_Update	8	static
+../Core/Src/main.c:458:6:Press_the_button	8	static
+../Core/Src/main.c:495:6:Error_Handler	4	static,ignoring_inline_asm
